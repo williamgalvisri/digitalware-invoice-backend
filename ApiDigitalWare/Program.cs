@@ -19,10 +19,23 @@ builder.Services.AddDbContext<db_system_digitalwareContext>(options =>
         options.UseSqlServer(connectionString);
     }
 });
+
+var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(
+        MyAllowSpecificOrigins,
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:4200").AllowAnyHeader().AllowAnyMethod(); ;
+        }
+    );
+});
 // Add Interface
 builder.Services.AddTransient<CustomerInterface, CustomerRepositories>();
 builder.Services.AddTransient<InvoiceInterface, InvoiceRepositories>();
-builder.Services.AddTransient<InventorieRepositories, InventorieRepositories>();
+builder.Services.AddTransient<ProductInterface, ProductRepositories>();
 builder.Services.AddScoped<InventorieRepositories>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -39,7 +52,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors(MyAllowSpecificOrigins);
+
 app.UseAuthorization();
+
 
 app.MapControllers();
 

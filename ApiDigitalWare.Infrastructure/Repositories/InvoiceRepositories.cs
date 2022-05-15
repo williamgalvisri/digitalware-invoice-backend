@@ -15,22 +15,44 @@ namespace ApiDigitalWare.Infrastructure.Repositories
             _inventoriRepositories = inventorieRepositories;
         }
 
-        public List<TbInvoice> GetInovices()
+        public List<InvoicesWithInformationCustomersEntity> GetInovices()
         {
-            var response = _db.TbInvoices.ToList();
-            return response;
+            return QueryInvoicesWithInformationCustomers();
         }
 
-        public void CreateInvoice(TbInvoice header, List<TbInvoiceDetail> detail)
+        public void  CreateInvoice(InvoicePayloadEntity payload)
         {
             try
             {
-                _db.TbInvoices.Add(header);
-                for (int i = 0; i < detail.Count; i++)
+                var consecutive = _db.TbInvoices.Where(p => p.Consecutive == payload.Consecutive).FirstOrDefault();
+
+                if (consecutive != null)
                 {
-                    _db.TbInvoiceDetails.Add(detail[i]);
+                    throw new Exception("Already exist that consecutive");
                 }
-                _db.SaveChanges();
+                var priceList = _db.TbPriceLists.First();
+                List<TbInvoiceDetail> products = new List<TbInvoiceDetail>();
+                for (int i = 0; i < payload.Products.Count; i++)
+                {
+                    products.Add(new TbInvoiceDetail {
+                        IdProductFk = payload.Products[i].Id,
+                        Count = payload.Products[i].Count
+                    });
+                }
+
+                var invoice = new TbInvoice
+                {
+                    Consecutive = payload.Consecutive,
+                    IdCustomerFk = payload.IdCustomer,
+                    DatePurchase = payload.DatePurchase,
+                    IdPriceListFk = priceList.Id,
+                    TbInvoiceDetails = products,
+                    CreatedAt = DateTime.Now,
+                    UpdatedAt = DateTime.Now,
+                    Active = true
+                };
+                _db.Add(invoice);
+                _db.SaveChangesAsync();
             } catch(Exception)
             {
                 throw;
@@ -48,23 +70,35 @@ namespace ApiDigitalWare.Infrastructure.Repositories
         /// <param name="id"></param>
         /// <param name="header"></param>
         /// <param name="detail"></param>
-        public void UpdateInvoice(decimal id, TbInvoice header, List<TbInvoiceDetail> detail)
+        public void UpdateInvoice(decimal id, InvoicePayloadEntity payload)
         {
             try
             {
-                var invoice = _db.TbInvoices.Where(t => t.Id == id).First();
-                invoice = header;
-                var invoiceDetail = _db.TbInvoiceDetails.Where(t => t.IdInvoiceFk == id).ToList();
-                // We need discount in stock inventory
-                DiscountStockProductInvoiceDetail(invoiceDetail);
-
-                // Update each deatil invoice
-                for (int i = 0; i < detail.Count; i++)
+                var invoice = _db.TbInvoices.Where(t => t.Id == id).FirstOrDefault();
+                invoice.IdCustomerFk = payload.IdCustomer;
+                 
+                // Remove all products
+                var productsStorage = _db.TbInvoiceDetails.Where(t => t.IdInvoiceFk == id).ToList();
+                _db.TbInvoiceDetails.RemoveRange(productsStorage);
+                if (invoice != null)
                 {
-                    var invoiceFound = invoiceDetail.Find(t => t.Id == detail[i].Id);
-                    invoiceFound = detail[i];
+                    List<TbInvoiceDetail> products = new List<TbInvoiceDetail>();
+                    for (int i = 0; i < payload.Products.Count; i++)
+                    {
+                        products.Add(new TbInvoiceDetail
+                        {
+                            IdProductFk = payload.Products[i].Id,
+                            Count = payload.Products[i].Count,
+                            IdInvoiceFk = id
+                        });
+                    }
+                    // Add new products
+                    if (products.Count > 0)
+                    {
+                        _db.TbInvoiceDetails.AddRange(products);
+                    }
                 }
-                _db.SaveChanges();
+                _db.SaveChangesAsync();
             }
             catch (Exception)
             {
@@ -114,10 +148,10 @@ namespace ApiDigitalWare.Infrastructure.Repositories
             var invoice = _db.TbInvoices.Where(t => t.Id == id).First();
 
             // Get list products with price
-            var queryProduct = GetProductDetailWithPrice(id);
+            var queryProduct = QueryProductDetailWithPrice(id);
 
             // Get invoice complete
-            var queryCompleteInvoice = GetCompleteInvoice(id, queryProduct);
+            var queryCompleteInvoice = QueryCompleteInvoice(id, queryProduct);
 
 
             if (invoice != null)
@@ -129,7 +163,28 @@ namespace ApiDigitalWare.Infrastructure.Repositories
             }
         }
 
-        private List<ProductPriceEntity> GetProductDetailWithPrice(decimal id)
+        public CompleteInvoiceDataEntity GetInvoiceByConsecutive(Guid consecutive)
+        {
+            var invoice = _db.TbInvoices.Where(t => t.Consecutive == consecutive).First();
+
+            // Get list products with price
+            var queryProduct = QueryProductDetailWithPrice(invoice.Id);
+
+            // Get invoice complete
+            var queryCompleteInvoice = QueryCompleteInvoice(invoice.Id, queryProduct);
+
+
+            if (invoice != null)
+            {
+                return queryCompleteInvoice;
+            }
+            else
+            {
+                throw new Exception("This invoice not exists");
+            }
+        }
+
+        private List<ProductPriceEntity> QueryProductDetailWithPrice(decimal id)
         {
             var response = (
                         from p in _db.TbProducts
@@ -148,7 +203,7 @@ namespace ApiDigitalWare.Infrastructure.Repositories
             return response;
         }
 
-        private CompleteInvoiceDataEntity GetCompleteInvoice(decimal id, List<ProductPriceEntity> queryProduct)
+        private CompleteInvoiceDataEntity QueryCompleteInvoice(decimal id, List<ProductPriceEntity> queryProduct)
         {
             var response = (
                 from a in _db.TbInvoices
@@ -162,12 +217,48 @@ namespace ApiDigitalWare.Infrastructure.Repositories
                     Dni = c.Dni,
                     Name = c.Name,
                     LastName = c.LastName,
+                    DatePurchase = a.DatePurchase,
                     Consecutive = a.Consecutive,
                     Products = queryProduct
                 }
-              ).First();
+              ).FirstOrDefault();
+            if (response == null)
+            {
+                response = (from a in _db.TbInvoices
+                            join c in _db.TbCustomers on a.IdCustomerFk equals c.Id 
+                            where a.Id == id
+                            select new CompleteInvoiceDataEntity
+                            {
+                                Id = a.Id,
+                                IdCustomerFk = a.IdCustomerFk,
+                                Dni = c.Dni,
+                                Name = c.Name,
+                                LastName = c.LastName,
+                                Consecutive = a.Consecutive,
+                                DatePurchase = a.DatePurchase,
+                                Products = new List<ProductPriceEntity>()
+                            }).First();
+            }
             return response;
         }
+
+        private List<InvoicesWithInformationCustomersEntity> QueryInvoicesWithInformationCustomers()
+        {
+            var invoices = (from a in _db.TbInvoices
+                            join b in _db.TbCustomers on a.IdCustomerFk equals b.Id
+                            select new InvoicesWithInformationCustomersEntity
+                            {
+                                Id = a.Id,
+                                Name = b.Name,
+                                LastName = b.LastName,
+                                Dni = b.Dni,
+                                Consecutive = a.Consecutive,
+                                DatePurchase = a.DatePurchase
+                            }).ToList();
+            return invoices;
+        }
+
+
 
     }
 

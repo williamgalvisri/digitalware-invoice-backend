@@ -6,26 +6,26 @@ using Microsoft.AspNetCore.Mvc;
 namespace ApiDigitalWare.Controllers
 {
     [ApiController]
-    [Route("customer")]
-    public class CustomerController : ControllerBase
+    [Route("product")]
+    public class ProductController : ControllerBase
     {
-        private CustomerInterface _customerInferface;
-        public CustomerController(CustomerInterface customerInferface)
+        private ProductInterface _productInferface;
+        public ProductController(ProductInterface productInferface)
         {
-            _customerInferface = customerInferface;
+            _productInferface = productInferface;
         }
 
-        [HttpGet("get-customers")]
-        public IActionResult GetCustomers()
+        [HttpGet("get-products-with-price")]
+        public IActionResult GetProducts()
         {
             try
             {
-                List<TbCustomer> customers = _customerInferface.GetCustomers();
+                List<ProductWithPrice> products = _productInferface.GetProductsWithPrice();
                 var data = new
                 {
-                    customers
+                    products
                 };
-                object result = ResponsesUtilities.ParseResponse(200, "Customer Fetched", data);
+                object result = ResponsesUtilities.ParseResponse(200, "Products Fetched", data);
                 return Ok(result);
             }
             catch (Exception ex)

@@ -2,6 +2,7 @@ using ApiDigitalWare.Core.Interface;
 using ApiDigitalWare.Core.Entities;
 using ApiDigitalWare.Core.Utilities;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 
 namespace ApiDigitalWare.Controllers
 {
@@ -24,7 +25,7 @@ namespace ApiDigitalWare.Controllers
         {
             try
             {
-                List<TbInvoice> invoices = _invoiceInterface.GetInovices();
+                List<InvoicesWithInformationCustomersEntity> invoices = _invoiceInterface.GetInovices();
                 var data = new
                 {
                     invoices
@@ -71,11 +72,11 @@ namespace ApiDigitalWare.Controllers
         /// <param name="header">Schema TbInvoice</param>,
         /// <param name="detail">Schema TbInvoice</param>
         [HttpPost]
-        public IActionResult CreateInvoice(dynamic payload)
+        public IActionResult CreateInvoice(InvoicePayloadEntity payload)
         {
             try
             {
-                _invoiceInterface.CreateInvoice(payload.header, payload.detail);
+                _invoiceInterface.CreateInvoice(payload);
                 object result = ResponsesUtilities.ParseResponse(200, "Inovice created", new {});
                 return Ok(result);
             }
@@ -92,11 +93,11 @@ namespace ApiDigitalWare.Controllers
         /// <returns>IActionResult</returns>
         /// <param name="id">id invoice.</param>
         [HttpPut("{id}")]
-        public IActionResult UpdateInvoice(decimal id, dynamic payload)
+        public IActionResult UpdateInvoice(decimal id, InvoicePayloadEntity payload)
         {
             try
             {
-                _invoiceInterface.UpdateInvoice(id, payload.header, payload.deatail);
+                _invoiceInterface.UpdateInvoice(id, payload);
  
                 object result = ResponsesUtilities.ParseResponse(200, "Invoice updated", new {});
                 return Ok(result);
@@ -144,6 +145,32 @@ namespace ApiDigitalWare.Controllers
                     consecutive
                 };
                 object result = ResponsesUtilities.ParseResponse(200, "Consecutive generated", data);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                object result = ResponsesUtilities.ParseResponse(500, ex.Message, new { });
+                return BadRequest(result);
+            }
+        }
+
+
+        /// <summary>
+        /// Method to get a invoice by (<paramref name="consecutive"/>).
+        /// </summary>
+        /// <returns>IActionResult</returns>
+        /// <param name="consecutive">consecutive invoice.</param>
+        [HttpGet("get-by-consecutive/{consecutive}")]
+        public IActionResult GetInvoiceByConsecutive(Guid consecutive)
+        {
+            try
+            {
+                CompleteInvoiceDataEntity invoice = _invoiceInterface.GetInvoiceByConsecutive(consecutive);
+                var data = new
+                {
+                    invoice
+                };
+                object result = ResponsesUtilities.ParseResponse(200, "Invoice fetched", data);
                 return Ok(result);
             }
             catch (Exception ex)
